@@ -2,69 +2,78 @@
 #include <string.h>
 #include <ctype.h>
 
-#define MAX 10
+void add_to_result(char result[], char symbol) {
+    if (strchr(result, symbol) == NULL) {
+        int len = strlen(result);
+        result[len] = symbol;
+        result[len + 1] = '\0';
+    }
+}
 
-int n;
-char production[MAX][MAX], followSet[MAX][MAX], firstSet[MAX][MAX];
-int m = 0, followIndex = 0, firstIndex = 0;
+void first(char rules[10][10], char var, char result[], int ruleCount, char nonTerminals[], int nonTerminalCount);
+void follow(char rules[10][10], char var, char result[], int ruleCount, char nonTerminals[], int nonTerminalCount);
 
-// Function to compute the FIRST of a non-terminal
-void findFirst(char c, int q1, int q2) {
-    if (!(isupper(c))) {
-        firstSet[firstIndex][m++] = c;
-    } else {
-        for (int j = 0; j < n; j++) {
-            if (production[j][0] == c) {
-                int k = 2;
-                while (production[j][k] != '\0') {
-                    if (production[j][k] == '|') {
-                        k++;
-                        continue;
+int is_non_terminal(char symbol, char nonTerminals[], int nonTerminalCount) {
+    for (int i = 0; i < nonTerminalCount; i++) {
+        if (symbol == nonTerminals[i]) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void first(char rules[10][10], char var, char result[], int ruleCount, char nonTerminals[], int nonTerminalCount) {
+    int i, j;
+
+    for (i = 0; i < ruleCount; i++) {
+        if (rules[i][0] == var) {
+            if (!is_non_terminal(rules[i][2], nonTerminals, nonTerminalCount)) {
+                add_to_result(result, rules[i][2]);
+            } else if (rules[i][2] == '*') {
+                add_to_result(result, '*');
+            } else {
+                char temp[10] = "";
+                first(rules, rules[i][2], temp, ruleCount, nonTerminals, nonTerminalCount);
+                for (j = 0; temp[j] != '\0'; j++) {
+                    if (temp[j] != '*') {
+                        add_to_result(result, temp[j]);
                     }
-                    if (production[j][k] == '#') {
-                        if (production[q1][q2] == '\0') {
-                            firstSet[firstIndex][m++] = '#';
-                        } else {
-                            findFirst(production[q1][q2], q1, q2 + 1);
-                        }
-                    } else if (!isupper(production[j][k])) {
-                        firstSet[firstIndex][m++] = production[j][k];
-                        break;
-                    } else {
-                        findFirst(production[j][k], j, k + 1);
-                        break;
-                    }
-                    k++;
+                }
+                if (strchr(temp, '*') != NULL && rules[i][3] != '\0') {
+                    first(rules, rules[i][3], result, ruleCount, nonTerminals, nonTerminalCount);
                 }
             }
         }
     }
 }
 
-// Function to compute the FOLLOW of a non-terminal
-void follow(char c) {
-    if (production[0][0] == c) {
-        followSet[followIndex][m++] = '$';
+void follow(char rules[10][10], char var, char result[], int ruleCount, char nonTerminals[], int nonTerminalCount) {
+    int i, j;
+    if (var == rules[0][0]) {
+        add_to_result(result, '$'); 
     }
-    for (int i = 0; i < n; i++) {
-        for (int j = 2; j < strlen(production[i]); j++) {
-            if (production[i][j] == c) {
-                if (production[i][j + 1] != '\0' && production[i][j + 1] != '|') {
-                    int tempM = m;
-                    m = 0;
-                    findFirst(production[i][j + 1], 0, 0);
-                    for (int k = 0; k < m; k++) {
-                        if (firstSet[firstIndex][k] != '#') {
-                            followSet[followIndex][tempM++] = firstSet[firstIndex][k];
-                        } else {
-                            follow(production[i][0]);
+
+    for (i = 0; i < ruleCount; i++) {
+        for (j = 2; j < strlen(rules[i]); j++) {
+            if (rules[i][j] == var) {
+                if (rules[i][j + 1] != '\0') {
+                    if (!is_non_terminal(rules[i][j + 1], nonTerminals, nonTerminalCount)) {
+                        add_to_result(result, rules[i][j + 1]);
+                    } else {
+                        char temp[10] = "";
+                        first(rules, rules[i][j + 1], temp, ruleCount, nonTerminals, nonTerminalCount);
+                        for (int k = 0; temp[k] != '\0'; k++) {
+                            if (temp[k] != '*') {
+                                add_to_result(result, temp[k]);
+                            }
+                        }
+                        if (strchr(temp, '*') != NULL && rules[i][j + 2] == '\0') {
+                            follow(rules, rules[i][0], result, ruleCount, nonTerminals, nonTerminalCount);
                         }
                     }
-                    m = tempM;
-                }
-                if (production[i][j + 1] == '\0' || production[i][j + 1] == '|') {
-                    if (production[i][0] != c) {
-                        follow(production[i][0]);
+                } else {
+                    if (rules[i][0] != var) {
+                        follow(rules, rules[i][0], result, ruleCount, nonTerminals, nonTerminalCount);
                     }
                 }
             }
@@ -73,31 +82,37 @@ void follow(char c) {
 }
 
 int main() {
-    printf("Enter the number of productions: ");
+    int i, j, n;
+    char rules[10][10], nonTerminals[10], variable;
+    char result[10];
+    int nonTerminalCount = 0;
+
+    printf("Enter the number of rules: ");
     scanf("%d", &n);
-    printf("Enter the productions (e.g., S->AB):\n");
-    for (int i = 0; i < n; i++) {
-        scanf("%s", production[i]);
+    printf("Enter the grammar rules (format: A=xyz):\n");
+    for (i = 0; i < n; i++) {
+        scanf("%s", rules[i]);
+        if (!strchr(nonTerminals, rules[i][0])) {
+            nonTerminals[nonTerminalCount++] = rules[i][0];
+        }
     }
 
-    int choice;
-    do {
-        m = 0;
-        printf("Enter the element to find FOLLOW: ");
-        char c;
-        scanf(" %c", &c);
-        followIndex++;
-        follow(c);
+    while (1) {
+        printf("\nEnter variable to find FIRST and FOLLOW (0 to exit): ");
+        scanf(" %c", &variable);
 
-        printf("FOLLOW(%c) = { ", c);
-        for (int i = 0; i < m; i++) {
-            printf("%c ", followSet[followIndex - 1][i]);
+        if (variable == '0') {
+            break;
         }
-        printf("}\n");
 
-        printf("Do you want to find FOLLOW of another element? (1 for Yes / 0 for No): ");
-        scanf("%d", &choice);
-    } while (choice);
+        strcpy(result, "");
+        first(rules, variable, result, n, nonTerminals, nonTerminalCount);
+        printf("FIRST(%c) = { %s }\n", variable, result);
+
+        strcpy(result, "");
+        follow(rules, variable, result, n, nonTerminals, nonTerminalCount);
+        printf("FOLLOW(%c) = { %s }\n", variable, result);
+    }
 
     return 0;
 }
